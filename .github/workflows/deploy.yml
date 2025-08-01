@@ -1,38 +1,45 @@
-name: Deploy Invoify App
+name: Provision and Deploy Invoify
 
 on:
   push:
-    branches: [ci/cd-pipeline]
+    branches: [ci/cd-pipeline]  # or your working branch
+  workflow_dispatch:
+
+env:
+  IMAGE_NAME: ${{ secrets.DOCKER_USERNAME }}/invoify
+  VERSION: ${{ github.sha }}
 
 jobs:
-  deploy:
+  provision_and_deploy:
     runs-on: ubuntu-latest
-
-    env:
-      IMAGE_NAME: ${{ secrets.DOCKER_USERNAME }}/invoify
-      VERSION: ${{ github.sha }}
-      CONTAINER_NAME: invoify  # fallback container name
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v3
 
-    - name: Download EC2 IP from artifact
-      uses: actions/download-artifact@v4
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v2
       with:
-        name: ec2-ip
-        path: terraform/
+        terraform_version: 1.6.0
 
-    - name: Validate EC2 IP exists
+    - name: Terraform Init & Apply
+      working-directory: ./terraform
       run: |
-        if [ ! -s terraform/ec2_ip.txt ]; then
-          echo "❌ EC2 IP not found. Please run the provision workflow first."
-          exit 1
-        fi
+        terraform init
+        terraform apply -auto-approve
 
-    - name: Read IP to environment variable
-      id: set-ip
-      run: echo "EC2_IP=$(cat terraform/ec2_ip.txt)" >> $GITHUB_ENV
+    - name: Extract EC2 Public IP
+      id: ec2
+      working-directory: ./terraform
+      run: |
+        IP=$(terraform output -raw ec2_public_ip)
+        echo "EC2_IP=$IP" >> $GITHUB_ENV
+        echo "EC2_IP=$IP"
+        echo "::set-output name=ec2_ip::$IP"
+
+    - name: Output SSH Command
+      working-directory: ./terraform
+      run: terraform output ssh_connection_command
 
     - name: Login to Docker Hub
       uses: docker/login-action@v3
@@ -40,12 +47,12 @@ jobs:
         username: ${{ secrets.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
 
-    - name: Build and push Docker image
+    - name: Build and Push Docker Image
       run: |
         docker build -t $IMAGE_NAME:$VERSION .
         docker push $IMAGE_NAME:$VERSION
 
-    - name: Deploy on EC2 using SSH
+    - name: Deploy to EC2 via SSH
       uses: appleboy/ssh-action@v0.1.10
       with:
         host: ${{ env.EC2_IP }}
@@ -54,8 +61,6 @@ jobs:
         script: |
           echo "VERSION=${{ github.sha }}" > .env
           echo "DOCKER_USERNAME=${{ secrets.DOCKER_USERNAME }}" >> .env
-          echo "CONTAINER_NAME=${{ env.CONTAINER_NAME }}" >> .env
           docker pull $IMAGE_NAME:$VERSION
-          docker stop $CONTAINER_NAME || true
-          docker rm $CONTAINER_NAME || true
+          docker stop invoify || true && docker rm invoify || true
           docker-compose --env-file .env up -d
