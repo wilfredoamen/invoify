@@ -21,3 +21,5 @@ variable "private_key_path" {
   type        = string
   default     = "~/.ssh/oz-key-pair.pem"
 }
+
+# n 
