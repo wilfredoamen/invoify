@@ -1,4 +1,5 @@
-name: Provision EC2 Infrastructure
+name: EC2 Provisioning from Terraform
+
 
 on:
   workflow_dispatch:
