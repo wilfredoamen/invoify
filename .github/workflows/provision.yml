@@ -1,4 +1,4 @@
-name: Provision EC2 Infrastructure
+name: Provision-EC2-Infrastructure
 
 on:
   workflow_dispatch:
