@@ -1,6 +1,4 @@
-# Manual trigger for Terraform EC2 provisioning
-
-name: Provision-EC2-Infrastructure
+name: Provision EC2 Infrastructure
 
 on:
   workflow_dispatch:
@@ -19,13 +17,13 @@ jobs:
         terraform_version: 1.6.0
 
     - name: Terraform Init & Apply
-      working-directory: ./terraform
+      working-directory: terraform
       run: |
         terraform init
         terraform apply -auto-approve
 
     - name: Save EC2 IP as artifact
-      working-directory: ./terraform
+      working-directory: terraform
       run: |
         terraform output -raw ec2_public_ip > ec2_ip.txt
 
@@ -35,6 +33,6 @@ jobs:
         name: ec2-ip
         path: terraform/ec2_ip.txt
 
-    - name: Show SSH connection command
-      working-directory: ./terraform
+    - name: Show SSH command
+      working-directory: terraform
       run: terraform output ssh_connection_command
