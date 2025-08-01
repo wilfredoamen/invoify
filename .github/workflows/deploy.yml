@@ -18,7 +18,7 @@ jobs:
       uses: actions/checkout@v3
 
     - name: Download EC2 IP from artifact
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
         name: ec2-ip
         path: terraform/
