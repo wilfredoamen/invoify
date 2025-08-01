@@ -1,3 +1,5 @@
+# Manual trigger for Terraform EC2 provisioning
+
 name: Provision-EC2-Infrastructure
 
 on:
