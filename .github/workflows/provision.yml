@@ -1,0 +1,38 @@
+name: Provision EC2 Infrastructure
+
+on:
+  workflow_dispatch:
+
+jobs:
+  provision:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v2
+      with:
+        terraform_version: 1.6.0
+
+    - name: Terraform Init & Apply
+      working-directory: ./terraform
+      run: |
+        terraform init
+        terraform apply -auto-approve
+
+    - name: Save EC2 IP as artifact
+      working-directory: ./terraform
+      run: |
+        terraform output -raw ec2_public_ip > ec2_ip.txt
+
+    - name: Upload EC2 IP artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: ec2-ip
+        path: terraform/ec2_ip.txt
+
+    - name: Show SSH connection command
+      working-directory: ./terraform
+      run: terraform output ssh_connection_command

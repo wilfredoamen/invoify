@@ -1,0 +1,61 @@
+name: Deploy Invoify App
+
+on:
+  push:
+    branches: [ci/cd-pipeline]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    env:
+      IMAGE_NAME: ${{ secrets.DOCKER_USERNAME }}/invoify
+      VERSION: ${{ github.sha }}
+      CONTAINER_NAME: invoify  # fallback container name
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Download EC2 IP from artifact
+      uses: actions/download-artifact@v3
+      with:
+        name: ec2-ip
+        path: terraform/
+
+    - name: Validate EC2 IP exists
+      run: |
+        if [ ! -s terraform/ec2_ip.txt ]; then
+          echo "❌ EC2 IP not found. Please run the provision workflow first."
+          exit 1
+        fi
+
+    - name: Read IP to environment variable
+      id: set-ip
+      run: echo "EC2_IP=$(cat terraform/ec2_ip.txt)" >> $GITHUB_ENV
+
+    - name: Login to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_TOKEN }}
+
+    - name: Build and push Docker image
+      run: |
+        docker build -t $IMAGE_NAME:$VERSION .
+        docker push $IMAGE_NAME:$VERSION
+
+    - name: Deploy on EC2 using SSH
+      uses: appleboy/ssh-action@v0.1.10
+      with:
+        host: ${{ env.EC2_IP }}
+        username: ubuntu
+        key: ${{ secrets.EC2_SSH_KEY }}
+        script: |
+          echo "VERSION=${{ github.sha }}" > .env
+          echo "DOCKER_USERNAME=${{ secrets.DOCKER_USERNAME }}" >> .env
+          echo "CONTAINER_NAME=${{ env.CONTAINER_NAME }}" >> .env
+          docker pull $IMAGE_NAME:$VERSION
+          docker stop $CONTAINER_NAME || true
+          docker rm $CONTAINER_NAME || true
+          docker-compose --env-file .env up -d
